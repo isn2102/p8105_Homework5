@@ -1,0 +1,123 @@
+---
+title: "Homework5"
+author: "Isabel Nelson"
+date: "11/10/2020"
+output: github_document
+---
+
+
+SET SEED!!!
+```{r setup, include=FALSE}
+library(tidyverse)
+
+# Set how graphs are printed in knitted file
+knitr::opts_chunk$set(
+  fig.width = 10,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+#Set global theme for plots
+theme_set(theme_minimal(base_size = 18) + theme(
+  legend.position = "bottom"))
+
+#Set options for all plots
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+#Set options for all plots
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+### Problem 1
+Read in the data, from course website (originally from Washington Post). Case_when is basically and if/then statement to create a new variable resolved that has a specific values when disposition is a certain value. 
+```{r}
+homicide_df <- 
+  read_csv("data/homicide-data.csv") %>% 
+  mutate(
+    city_state = str_c(city, state, sep = "_"),
+    resolved = case_when(
+      disposition == "Closed without arrest" ~ "unsolved", 
+      disposition == "Open/No arrest" ~ "unsolved", 
+      disposition == "Closed by arrest" ~ "solved",
+    )
+  ) %>% 
+  select(city_state, resolved) %>% 
+  filter(city_state != "Tulsa_AL")
+```
+
+Explore the dataset
+```{r}
+aggregate_df <-
+  homicide_df %>% 
+  group_by(city_state) %>% 
+  summarize(
+    hom_total = n(), 
+    hom_unsolved = sum(resolved == "unsolved")
+  )
+```
+
+Try prop test for a single city. This gives some statistics, particularly of interest a confidence interval for the estimated proportion for unsolved homicides in that city. Use broom::tidy to make the output of prop.test easily extractable for other uses (tibble).
+```{r}
+prop.test(
+  aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull(hom_unsolved), 
+  aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull(hom_total)) %>% 
+  broom::tidy()
+```
+
+Now try iteration. Going straight to a map, not doing the intermediate step of creating a for loop. In this case map takes pair of input columns (hom_unsolved and hom_total), outputs a column (prop_tests) which is added to the dataframe. Pull prop_tests column to check it. 
+```{r}
+aggregate_df %>% 
+  mutate(
+    prop_tests = map2(.x = hom_unsolved, .y = hom_total, ~prop.test(x = .x, n = .y))
+  ) %>% pull(prop_tests)
+```
+
+Use map to clean up every entry in the prop_tests column. Now we have a list with a bunch of tibbles (tidy_tests output) inside the list. Unnest expands all those into their own rows.
+```{r}
+results_df <-
+aggregate_df %>% 
+  mutate(
+    prop_tests = map2(.x = hom_unsolved, .y = hom_total, ~prop.test(x = .x, n = .y)),
+    tidy_tests = map(.x = prop_tests, ~broom::tidy(.x))
+  ) %>% 
+  select(-prop_tests) %>% 
+  unnest(tidy_tests) %>% 
+  select(city_state, estimate, conf.low, conf.high)
+```
+
+Now we can visualize the results in ggplot.
+```{r}
+results_df %>% 
+  mutate(city_state = fct_reorder(city_state, estimate)) %>% 
+  ggplot(aes(x = city_state, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 05, hjust = 1))
+```
+
+### Problem 2
+Import datasets. First create a dataframe that has the names of all the files in the data folder that we want. Mutate to create the appropriate relative path. Use mutate or some string operations to figure out if participant is in the control or experimental group. Have to tidy a little more (week 1, 2, 3, and observations next to it - need to pivot)
+```{r}
+data_1 <- read_csv("data/") #Example of reading in one file
+path_df <-
+  tibble(
+    path = list.files("data folder name")
+) %>% 
+  mutate(
+    path = str_c("lda_data/", path), 
+    data = map(... , ... )) # This should give a dataframe that contains a column with dataframes for each participant (datasheet) as well as a column with the corresponding file path name for that participant
+read_csv(path_df$path[[1]])
+
+```
+
+
+### Problem 3
+Simulate a bunch of datasets and p-values for the hypothesis test that under null the mean = 0 (use the function we wrote in class, but modify for p-value and estimate). 
+```{r}
+
+```
+
