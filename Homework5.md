@@ -5,9 +5,10 @@ Isabel Nelson
 
 ### Problem 1
 
-Read in the data, from course website (originally from Washington Post).
-Case\_when is basically and if/then statement to create a new variable
-resolved that has a specific values when disposition is a certain value.
+Read in the data, from course website, originally from Washington Post.
+(Note: case\_when is basically an if/then statement to create a new
+variable “resolved” that has a specific value when “disposition” is a
+certain value.)
 
 ``` r
 homicide_df <- 
@@ -56,7 +57,7 @@ prop.test(
 Now do iteration. Going straight to a map, not doing the intermediate
 step of creating a for loop. In this case map takes pair of input
 columns (hom\_unsolved and hom\_total), outputs a column (prop\_tests)
-which is added to the dataframe. Pull prop\_tests column to check it.
+which is added to the dataframe.
 
 ``` r
 aggregate_df %>% 
@@ -163,6 +164,49 @@ values that are higher than the control arm participants.
 
 ### Problem 3
 
-Simulate a bunch of datasets and p-values for the hypothesis test that
-under null the mean = 0 (use the function we wrote in class, but modify
-for p-value and estimate).
+Create a base function that takes in n, mu, and sigma (n and sigma
+pre-specified) and outputs a tibble with the results from a t-test where
+the null mean is zero and alpha = 0.05.
+
+``` r
+sim_mean_pval <- function(n = 30, mu, sigma = 5) {
+  
+  sim_data <- tibble(
+    x = rnorm(n, mean = mu, sd = sigma),
+  )
+  
+  sim_data %>% 
+    t.test(mu = 0, conf.level = 0.95) %>% 
+    broom::tidy() %>% 
+    select(estimate, p.value)
+}
+```
+
+Run the simulation: create a tibble with different mean value options,
+then perform the function operation 5000 times for each mean value using
+map. Condense these into a dataframe, remove the list column and unnest.
+
+``` r
+sim_results <- 
+  tibble(
+    mean_val = c(0, 1, 2, 3, 4, 5, 6)
+  ) %>% 
+  mutate(
+    output_list = map(.x = mean_val, ~ rerun(10, sim_mean_pval(mu = .x))),
+    output_df = map(output_list, bind_rows)
+  ) %>% 
+  select(-output_list) %>% 
+  unnest(output_df)
+```
+
+## TO DO
+
+  - Make a plot showing the proportion of times the null was rejected
+    (the power of the test) on the y axis and the true value of μ on the
+    x axis. Describe the association between effect size and power.  
+  - Make a plot showing the average estimate of μ̂ on the y axis and the
+    true value of μ on the x axis. Make a second plot (or overlay on the
+    first) the average estimate of μ̂ only in samples for which the null
+    was rejected on the y axis and the true value of μ on the x axis. Is
+    the sample average of μ̂ across tests for which the null is rejected
+    approximately equal to the true value of μ? Why or why not?
