@@ -5,8 +5,6 @@ date: "11/10/2020"
 output: github_document
 ---
 
-
-SET SEED!!!
 ```{r setup, include=FALSE}
 library(tidyverse)
 
@@ -19,7 +17,8 @@ knitr::opts_chunk$set(
 
 #Set global theme for plots
 theme_set(theme_minimal(base_size = 18) + theme(
-  legend.position = "bottom"))
+  legend.position = "bottom", 
+  axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1)))
 
 #Set options for all plots
 options(
@@ -30,13 +29,15 @@ options(
 #Set options for all plots
 scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
+
+set.seed(1)
 ```
 
 ### Problem 1
 Read in the data, from course website (originally from Washington Post). Case_when is basically and if/then statement to create a new variable resolved that has a specific values when disposition is a certain value. 
-```{r}
+```{r, message = FALSE}
 homicide_df <- 
-  read_csv("data/homicide-data.csv") %>% 
+  read_csv("data1/homicide-data.csv") %>% 
   mutate(
     city_state = str_c(city, state, sep = "_"),
     resolved = case_when(
@@ -50,7 +51,7 @@ homicide_df <-
 ```
 
 Explore the dataset
-```{r}
+```{r, message = FALSE}
 aggregate_df <-
   homicide_df %>% 
   group_by(city_state) %>% 
@@ -68,12 +69,12 @@ prop.test(
   broom::tidy()
 ```
 
-Now try iteration. Going straight to a map, not doing the intermediate step of creating a for loop. In this case map takes pair of input columns (hom_unsolved and hom_total), outputs a column (prop_tests) which is added to the dataframe. Pull prop_tests column to check it. 
+Now do iteration. Going straight to a map, not doing the intermediate step of creating a for loop. In this case map takes pair of input columns (hom_unsolved and hom_total), outputs a column (prop_tests) which is added to the dataframe. Pull prop_tests column to check it. 
 ```{r}
 aggregate_df %>% 
   mutate(
     prop_tests = map2(.x = hom_unsolved, .y = hom_total, ~prop.test(x = .x, n = .y))
-  ) %>% pull(prop_tests)
+  )
 ```
 
 Use map to clean up every entry in the prop_tests column. Now we have a list with a bunch of tibbles (tidy_tests output) inside the list. Unnest expands all those into their own rows.
@@ -95,25 +96,44 @@ results_df %>%
   mutate(city_state = fct_reorder(city_state, estimate)) %>% 
   ggplot(aes(x = city_state, y = estimate)) +
   geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 05, hjust = 1))
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high))
 ```
 
 ### Problem 2
-Import datasets. First create a dataframe that has the names of all the files in the data folder that we want. Mutate to create the appropriate relative path. Use mutate or some string operations to figure out if participant is in the control or experimental group. Have to tidy a little more (week 1, 2, 3, and observations next to it - need to pivot)
-```{r}
-data_1 <- read_csv("data/") #Example of reading in one file
-path_df <-
-  tibble(
-    path = list.files("data folder name")
-) %>% 
-  mutate(
-    path = str_c("lda_data/", path), 
-    data = map(... , ... )) # This should give a dataframe that contains a column with dataframes for each participant (datasheet) as well as a column with the corresponding file path name for that participant
-read_csv(path_df$path[[1]])
+Import datasets. Create a dataframe that has the names of all the files in the data folder of interest. Mutate to create a column with the appropriate relative path name. Create a new variable for what treatment arm the participant is in and ID. Map read_csv to each path name resulting in a dataframe with one column with the file name and one column with the dataframe for each participant. Tidy the final dataset by pivoting and remove unneeded columns. 
 
+```{r, message = FALSE}
+paths_df <-
+  tibble(
+    path = list.files("data2")) %>% 
+  mutate(
+    path = str_c("data2/", path), 
+    num = str_sub(path, -6, -5),
+    arm = case_when(
+      str_detect(path, "con") ~ "control",
+      str_detect(path, "exp") ~ "experimental"),
+    id = str_c(arm, num, sep = "_"), 
+    data = map(path, read_csv)) %>% 
+  unnest(data) %>% 
+  pivot_longer(
+    week_1:week_8, 
+    names_to = "obs_week", 
+    values_to = "obs_value") %>% 
+  select(-path, -num) 
 ```
 
+Create the graph to visualize participant observations by week.
+```{r, message = FALSE}
+paths_df %>% 
+ggplot(aes(x = obs_week, y = obs_value)) + 
+  geom_line() + 
+  aes(colour = arm) + 
+  xlab("Observation Time Point") +
+  ylab("Value") +
+  labs(title = "Subject observations over time") +
+  aes(group = factor(id))
+```
+From this graph we can see that generally participants in the experimental arm had higher values than those in the control arm over the study period. This is especially noticeable in the later weeks. At the beginning both arms were closer together and participant values were overlapping, but as the observations continue in time, the groups diverge and by week 8 there is no overlap between participants in control versus experimental arms - all 10 experimental participants have values that are higher than the control arm participants. 
 
 ### Problem 3
 Simulate a bunch of datasets and p-values for the hypothesis test that under null the mean = 0 (use the function we wrote in class, but modify for p-value and estimate). 
