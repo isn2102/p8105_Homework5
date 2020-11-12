@@ -151,7 +151,7 @@ sim_mean_pval <- function(n = 30, mu, sigma = 5) {
 }
 ```
 
-Run the simulation: create a tibble with different mean value options, then perform the function operation 5000 times for each mean value using map. Condense these into a dataframe, remove the list column and unnest. 
+Run the simulation: create a tibble with different mean value options, then perform the function operation 5000 times for each mean value using map. Condense these into a dataframe, remove the list column, and unnest. Then create a new variable designating whether p-value is rejected, and nest again.
 ```{r}
 sim_results <- 
   tibble(
@@ -162,13 +162,63 @@ sim_results <-
     output_df = map(output_list, bind_rows)
   ) %>% 
   select(-output_list) %>% 
-  unnest(output_df)
+  unnest(output_df) %>% 
+  mutate(
+    rejected = case_when(
+      p.value <= 0.05 ~ "yes",
+      p.value > 0.05 ~ "no")
+  ) %>% 
+  nest(data = estimate:rejected)
 ```
 
-## TO DO
-* Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of μ on the x axis. Describe the association between effect size and power.  
-* Make a plot showing the average estimate of μ̂  on the y axis and the true value of μ on the x axis. Make a second plot (or overlay on the first) the average estimate of μ̂  only in samples for which the null was rejected on the y axis and the true value of μ on the x axis. Is the sample average of μ̂  across tests for which the null is rejected approximately equal to the true value of μ? Why or why not?  
+Create a function to calculate the proportion of times the null was rejected. 
 ```{r}
-
+calc_proportion <- function(df) {
+  
+  df %>% 
+      {mutate(.,
+      n_no = count(filter(., rejected == "no")), 
+      n_yes = count(filter(., rejected == "yes")), 
+      prop = n_yes / (n_no + n_yes)
+      )}
+}
 ```
 
+Map function for each simulated mean value, then unnest data, remove unnecessary columns, create a new column that is a vector and not a dataframe so it will work with the graph, and then plot.
+```{r}
+sim_results %>% 
+  mutate(
+    proportion_df = map(.x = data, ~calc_proportion(df = .x))
+  ) %>% 
+  select(-data) %>% 
+  unnest(proportion_df) %>% 
+  select(mean_val, prop) %>% 
+  distinct(mean_val, prop) %>% 
+  mutate(
+    props = pull(prop) 
+  ) %>% 
+  ggplot(aes(x = mean_val, y = props)) + 
+  geom_point() + geom_line() +
+  xlab("True Mean Value") +
+  ylab("Proportion Null Rejected") +
+  labs(title = "Simulated Power under Null of Mean = 0")
+```
+From the graph we see that as effect size increases (as the true mean value gets further away from the null of zero on the x-axis) the power to reject the null increases as well (shown by the increasing proportion of times that the null is rejected, on the y-value). 
+
+Create two new datasets for all mean estimates and only rejected mean estimates, then plot both on the same graph. 
+```{r}
+sim_results %>% 
+unnest(data) %>% 
+select(-p.value) %>% 
+ggplot(aes(x = mean_val, y = estimate, color = rejected)) +
+geom_point() +
+xlab("True Mean Value") +
+ylab("Estimated Mean Value") +
+labs(title = "Comparison of mean estimates")
+  
+```
+
+**Is the sample average of μ̂  across tests for which the null is rejected approximately equal to the true value of μ? Why or why not?**
+
+**Change number of simulations to 5000**
+ 
